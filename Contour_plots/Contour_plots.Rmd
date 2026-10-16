@@ -1,0 +1,866 @@
+---
+title: "Contour plots for asymmetric space-time covariance functions"
+author: "Pulong Ma"
+date: " "
+output: html_document
+---
+
+```{r setup, message=FALSE}
+rm(list=ls())
+library(tidyverse)
+library(patchwork)
+library(Rcpp)
+library(scales)
+library(viridis)
+dir.create("figures", showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r, warning=FALSE}
+#sourceCpp("spacetime.cpp")
+source("pltfuns.R")
+
+# One horizontal color bar for each assembled contour figure.
+contour_legend = list(
+  guides(fill = guide_colourbar(
+    direction = "horizontal",
+    theme = theme(
+      legend.key.width = grid::unit(14, "cm"),
+      legend.key.height = grid::unit(0.45, "cm")
+    )
+  )),
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.box.spacing = grid::unit(0, "pt"),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.box.margin = margin(0, 0, 0, 0)
+  )
+)
+
+```
+
+
+# Contour plot for F-LMatern
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .4
+nu = 0.5
+rho = .2
+nugget = 0.00
+matern.df = df 
+
+matern.df$f1 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LFMatern",
+  cov.par=list(nu=nu, range=range, rho=rho))
+
+matern.f1 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$f1)
+                        )
+#matern.f1 
+
+```
+
+# Contour plot for LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .4
+nu = 0.5
+rho = .2
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+matern.df$z1 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam))
+
+matern.g1 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$z1)
+                        )
+#matern.g1
+
+
+```
+
+
+
+
+# Contour plot for LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .4
+nu = .5
+rho = .2 
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+
+matern.df$z2 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam))
+
+matern.g2 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$z2)
+                        )
+
+#matern.g2
+```
+
+# Contour plot for F-LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .8
+nu = .5
+rho = -1 
+nugget = 0.00
+
+
+matern.df$f2 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LFMatern",
+  cov.par=list(nu=nu, range=range, rho=rho))
+
+
+matern.f2 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$f2))
+
+#matern.f2
+```
+
+
+# Contour plot for LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .8
+nu = .5
+rho = -1 
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+
+matern.df$z3 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam))
+
+matern.g3 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$z3))
+
+#matern.g3
+```
+
+
+
+# Contour plot for LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .8
+nu = .5
+rho = -1
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+matern.df$z4 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam))
+
+
+matern.g4 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$z4))
+
+#matern.g4
+
+```
+
+# Fully symmetric 
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .8
+nu = .5
+rho = 0
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+matern.df$f3 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LFMatern",
+  cov.par=list(nu=nu, range=range, rho=rho))
+
+
+matern.f3 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$f3))
+
+#matern.f3
+
+```
+
+# Contour plot for LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .8
+nu = .5
+rho = 0
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+matern.df$z5 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam))
+
+
+matern.g5 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$z5))
+
+#matern.g5
+
+```
+
+# Contour plot for LMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .8
+nu = .5
+rho = 0
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+matern.df$z6 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam))
+
+
+matern.g6 = plt_contour(df=data.frame(s=matern.df$s,
+                          t=matern.df$t,
+                          cor=matern.df$z6))
+
+#matern.g6
+
+```
+
+
+
+### Assemble all the plots for LMatern
+```{r, fig.height=9, fig.width=16}
+library(latex2exp)
+library(patchwork)
+
+df1 = matern.df %>%
+  tidyr::pivot_longer(
+    cols=c(f1,z1,z2,f3,z5,z6,f2,z3,z4),
+    names_to="group", values_to="cor") %>%
+  mutate(group = 
+           factor(group,
+           levels=c("f1", "z1", "z2", 
+                    "f3", "z5", "z6",
+                    "f2", "z3", "z4"),               
+           ordered=TRUE))
+
+xlims = c(-3,3)
+ylims = c(3,3)
+
+labs1 = c(
+  f1="ϕ=0.4, v=0.2",
+  z1="λ=0.2, Λ=1",
+  z2="λ=0.2, Λ=4",
+  f3="ϕ=0.8, v=0",
+  z5="λ=0, Λ=1",
+  z6="λ=0, Λ=4",
+  f2="ϕ=0.8, v=-1",
+  z3="λ=-1, Λ=1",
+  z4="λ=-1, Λ=4")
+
+
+gg1 = plt2_contour(df=df1, 
+                   subtitle=labs1,
+                   xlab="u", ylab="h",
+                   n_col=3) + contour_legend
+print(gg1)
+ggsave("./figures/contour_LMatern.png", width=16, height=10)
+
+```
+
+
+## LCH model
+
+# Contour plot for Frozen CH model 
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .4
+nu = 0.5
+rho = .2 
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+ch.df = df
+ch.df$f1 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LFCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho))
+
+
+ch.f1 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$f1))
+
+#ch.f1
+```
+
+# Contour plot for LCH model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .4
+nu = 0.5
+rho = .2 
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+ch.df$z1 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam))
+
+
+ch.p1 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$z1))
+
+#ch.p1
+```
+
+
+# Contour plot for LCH model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .4
+nu = .5
+rho = .2
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+ch.df$z2 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam))
+
+#source("pltfuns.R")
+ch.p2 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$z2))
+
+#ch.p2
+```
+
+# Contour plot for Frozen CH model 
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .8
+nu = 0.5
+rho = -1 
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+ch.df$f2 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LFCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho))
+
+
+ch.f2 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$f2))
+
+```
+
+
+# Contour plot for LCH model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .8
+nu = .5
+rho = -1 
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+
+ch.df$z3 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam))
+
+ch.p3 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$z3))
+```
+
+
+
+# Contour plot for LCH model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .8
+nu = .5
+rho = -1
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+
+ch.df$z4 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam))
+
+
+ch.p4 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$z4))
+
+#ch.p4
+```
+
+### Fully symmetric 
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .8
+nu = .5
+rho = 0
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+
+ch.df$f3 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LFCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho))
+ch.f3 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$f3))
+
+#ch.f3
+```
+
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .8
+nu = .5
+rho = 0
+nugget = 0.00
+Lam = matrix(1,1,1)
+
+ch.df$z5 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam))
+ch.p5 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$z5))
+
+#ch.p5
+```
+
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .2
+range = .8
+nu = .5
+rho = 0
+nugget = 0.00
+Lam = matrix(4,1,1)
+
+ch.df$z6 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="LCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam))
+ch.p6 = plt_contour(df=data.frame(s=ch.df$s,
+                          t=ch.df$t,
+                          cor=ch.df$z6))
+
+#ch.p6
+```
+
+### Assemble all the plots for LCH
+```{r,fig.height=9, fig.width=16}
+library(latex2exp)
+library(patchwork)
+
+df2 = ch.df %>%
+  tidyr::pivot_longer(
+    cols=c(f1,z1,z2,f3,z5,z6, f2,z3,z4),
+    names_to="group", values_to="cor") %>%
+  mutate(group = 
+           factor(group,
+           levels=c("f1", "z1", "z2", 
+                    "f3", "z5", "z6",
+                    "f2", "z3", "z4"),               
+           ordered=TRUE))
+
+xlims = c(-3,3)
+ylims = c(3, 3)
+
+labs2 = c(
+  "f1"="α=0.2, β=0.4, v=0.2",
+  "z1"="λ=0.2, Λ=1",
+  "z2"="λ=0.2, Λ=4",
+  "f3"="α=0.2, β=0.8, v=0",
+  "z5"="λ=0, Λ=1",
+  "z6"="λ=0, Λ=4",
+  "f2"="α=0.2, β=0.8, v=-1",
+  "z3"="λ=-1, Λ=1",
+  "z4"="λ=-1, Λ=4"
+  )
+
+
+
+gg2 = plt2_contour(df=df2, 
+                   subtitle=labs2, 
+                   xlab="u", ylab="h",
+                   n_col=3) + contour_legend
+print(gg2)
+ggsave("./figures/contour_LCH.png", width=16, height=12)
+
+```
+
+## Generalized models
+
+The generalized parameter `a` is greater than the spatial dimension
+$d=1$ in all panels. The CH tail parameter is unchanged.
+
+
+
+
+### Contour plot for GLMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .4
+nu = 0.5
+rho = .2
+nugget = 0.00
+Lam = matrix(1,1,1)
+a=1.5
+
+GL.df = data.frame(df)
+GL.df$z1 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="GLMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam, a=a))
+
+GL.g1 = plt_contour(df=data.frame(s=GL.df$s,
+                          t=GL.df$t,
+                          cor=GL.df$z1)
+                        )
+#GL.g1
+
+
+```
+
+
+### Contour plot for GLMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .4
+nu = 0.5
+rho = .2
+nugget = 0.00
+Lam = matrix(1,1,1)
+a=2
+
+GL.df$z2 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="GLMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam, a=a))
+
+GL.g2 = plt_contour(df=data.frame(s=GL.df$s,
+                          t=GL.df$t,
+                          cor=GL.df$z2)
+                        )
+#GL.g2
+
+
+```
+
+
+### Contour plot for GLMatern model
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = c(.5, .8)
+range = .4
+nu = 0.5
+rho = .2
+nugget = 0.00
+Lam = matrix(1,1,1)
+a=3
+
+GL.df$z3 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="GLMatern",
+  cov.par=list(nu=nu, range=range, rho=rho, Lam=Lam, a=a))
+
+GL.g3 = plt_contour(df=data.frame(s=GL.df$s,
+                          t=GL.df$t,
+                          cor=GL.df$z3)
+                        )
+#GL.g3
+
+
+```
+
+
+### Contour plot for GLCH model
+
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .3
+range = .8
+nu = .5
+rho = -.5
+nugget = 0.00
+Lam = matrix(1,1,1)
+a=1.5
+GL.df$z4 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="GLCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam, a=a))
+GL.g4 = plt_contour(df=data.frame(s=GL.df$s,
+                          t=GL.df$t,
+                          cor=GL.df$z4))
+
+#GL.g4
+```
+
+
+### Contour plot for GLCH model
+
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .3
+range = .8
+nu = .5
+rho = -.5
+nugget = 0.00
+Lam = matrix(1,1,1)
+a=2
+GL.df$z5 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="GLCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam, a=a))
+GL.g5 = plt_contour(df=data.frame(s=GL.df$s,
+                          t=GL.df$t,
+                          cor=GL.df$z5))
+
+#GL.g5
+```
+
+
+### Contour plot for GLCH model
+
+```{r}
+s = seq(-4, 4, length.out=100) # space 
+t = seq(-4, 4, length.out=100) # time
+df = expand_grid(s=s, t=t)
+input = as.matrix(df)
+n = nrow(input)
+# setup parameters
+sig2 = 1
+tail = .3
+range = .8
+nu = .5
+rho = -.5
+nugget = 0.00
+Lam = matrix(1,1,1)
+a=3
+GL.df$z6 = STVGP::stgp.cor(
+  input, matrix(0, ncol=2), covfun_name="GLCH",
+  cov.par=list(nu=nu, range=range, tail=tail, rho=rho, Lam=Lam, a=a))
+GL.g6 = plt_contour(df=data.frame(s=GL.df$s,
+                          t=GL.df$t,
+                          cor=GL.df$z6))
+
+#GL.g6
+```
+
+### Assemble all the plots for generalized Matern/LCH models 
+```{r,fig.height=9, fig.width=16}
+library(latex2exp)
+library(patchwork)
+
+df3 = GL.df %>%
+  tidyr::pivot_longer(
+    cols=c(z1,z2,z3, z4, z5,z6),
+    names_to="group", values_to="cor") %>%
+  mutate(group = 
+           factor(group,
+           levels=c( "z1", "z2", 
+                    "z3", "z4", "z5", "z6"),               
+           ordered=TRUE))
+
+xlims = c(-3,3)
+ylims = c(3, 3)
+
+# Render Greek symbols as mathematical expressions, avoiding encoding issues.
+labs2 = c(
+  z1 = "list(phi == 0.4, a == 1.5)",
+  z2 = "list(phi == 0.4, a == '2.0')",
+  z3 = "list(phi == 0.4, a == '3.0')",
+  z4 = "list(alpha == 0.3, beta == 0.8, a == 1.5)",
+  z5 = "list(alpha == 0.3, beta == 0.8, a == '2.0')",
+  z6 = "list(alpha == 0.3, beta == 0.8, a == '3.0')"
+)
+
+
+
+gg3 = plt2_contour(df=df3, 
+                   subtitle=as_labeller(labs2, default=label_parsed), 
+                   xlab="u", ylab="h",
+                   n_col=3) + contour_legend
+print(gg3)
+ggsave("./figures/contour_GLM_GLCH.png", width=16, height=12)
+
+```

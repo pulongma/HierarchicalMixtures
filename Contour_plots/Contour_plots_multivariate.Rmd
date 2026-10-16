@@ -1,0 +1,372 @@
+---
+title: "Multivariate Lagrangian Matérn and CH contours"
+author: "Pulong Ma"
+date: " "
+output: html_document
+---
+
+
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(gsl)
+library(metR)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE,
+                     fig.width = 16, fig.height = 9)
+dir.create("figures", showWarnings = FALSE)
+Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
+
+```
+
+# Parameters and spatial cross-correlations
+
+The notation follows the multivariate hierarchical-mixture proposition
+in `Submission/JASA_R1_April152026/supplement.tex`:
+$K_{ij}(\ell_k,\ell_m)$ denotes the Matérn covariance and
+$\widetilde K_{ij}(\ell_k,\ell_m)$ denotes the CH covariance.
+We set $\sigma_1=\sigma_2=1$, so the plotted covariances are also
+correlations. The marginal parameters are free; cross-parameters and
+amplitudes follow the geometric-mean mixing construction. Here `A` is the latent response
+correlation matrix; the resulting colocated cross-correlation at time zero
+also contains the mixing-density overlap factor. In the supplement's
+notation, the two covariance functions are
+\[
+\begin{aligned}
+K_{ij}(\ell_k,\ell_m)
+&=a_{ij}c_{ij}^{\nu}
+\frac{\phi_{ij}^{2\nu_{ij}}}{\phi_i^{\nu_i}\phi_j^{\nu_j}}
+|\mathbf O_{ij}|^{-1/2}\mathcal M(r_{ij};\nu_{ij},\phi_{ij}),\\
+\widetilde K_{ij}(\ell_k,\ell_m)
+&=a_{ij}c_{ij}^{\nu}c_{ij}^{\alpha,\beta}
+|\mathbf O_{ij}|^{-1/2}
+\mathcal{CH}(r_{ij};\nu_{ij},\alpha_{ij},\beta_{ij}).
+\end{aligned}
+\]
+Statements about symmetry below apply to both covariance functions.
+The two space-time figures reuse the parameters below and
+$a_{12}=a_{21}=0.98$. The final two-dimensional spatial figure uses a
+separate, simple parameter set defined in its own code chunk.
+This coefficient controls dependence before mixing; the resulting
+cross-correlation also includes the mixing and transport factors.
+
+```{r}
+nu = c(0.6, 1.8)
+phi = c(0.85, 0.90)       # Matérn ranges; closer values increase mixing overlap
+alpha = c(0.65, 1.50)
+beta = c(0.85, 1.50)      # CH scales
+a = 0.98
+A = matrix(c(1, a, a, 1), 2, 2)
+
+# Component velocities for the one-dimensional space-time examples.
+lambda = c(0.65, -0.25)
+Sigma_Lambda = matrix(c(0.18, 0.06, 0.06, 0.28), 2, 2)
+t0 = 1
+
+grid = expand_grid(s = seq(-4, 4, length.out = 100),
+                   t = seq(-4, 4, length.out = 100))
+
+# Spatial mixture factor at the supplement's effective distance r_ij.
+# The caller supplies the transport multiplier |O_ij|^(-1/2).
+spatial_cor = function(r_ij, model, i, j) {
+  nu_ij = (nu[i] + nu[j]) / 2
+  log_c_nu = lgamma(nu_ij) - (lgamma(nu[i]) + lgamma(nu[j])) / 2
+  value = rep(1, length(r_ij))
+  positive = r_ij > 0
+
+  if (model == "Matern") {
+    phi_ij = sqrt(2 / (1 / phi[i]^2 + 1 / phi[j]^2))
+    log_c = log_c_nu + 2 * nu_ij * log(phi_ij) -
+      nu[i] * log(phi[i]) - nu[j] * log(phi[j])
+    z = r_ij[positive] / phi_ij
+    value[positive] = 2^(1 - nu_ij) / gamma(nu_ij) *
+      z^nu_ij * besselK(z, nu_ij)
+  } else {
+    alpha_ij = (alpha[i] + alpha[j]) / 2
+    beta_ij = sqrt((beta[i]^2 + beta[j]^2) / 2)
+    log_c_alpha_beta = lgamma(alpha_ij) -
+      (lgamma(alpha[i]) + lgamma(alpha[j])) / 2 +
+      alpha[i] * log(beta[i]) + alpha[j] * log(beta[j]) -
+      2 * alpha_ij * log(beta_ij)
+    log_c = log_c_nu + log_c_alpha_beta
+    value[positive] = exp(lgamma(nu_ij + alpha_ij) - lgamma(nu_ij)) *
+      hyperg_U(alpha_ij, 1 - nu_ij, (r_ij[positive] / beta_ij)^2)
+  }
+  A[i, j] * exp(log_c) * value
+}
+```
+
+# Common contour style
+
+Time difference $u$ is horizontal and spatial difference $h$ is vertical.
+The same function is used for the spatial figure, with its axes relabeled.
+All figures use the contour levels 0.1, 0.2, 0.4, and 0.6.
+The figures retain the original column labels $K_{11},K_{12},K_{21},K_{22}$
+and row labels Matérn and CH. In the text, the CH covariance is denoted
+$\widetilde K_{ij}$, following the supplement.
+Choose the levels when calling the function, for example
+`plot_contours(component, levels = c(0.1, 0.2, 0.4))` for three levels.
+For equally spaced levels, use `levels = seq(0.2, 0.8, length.out = 3)`.
+One level can form multiple curve segments; levels outside a panel's
+covariance range do not appear.
+
+```{r}
+plot_contours = function(df, xlab = "u", ylab = "h",
+                         levels = c(0.1, 0.2, 0.4, 0.6)) {
+  df = filter(df, abs(s) <= 2.1, abs(t) <= 2.1)
+  df$model = factor(df$model, levels = c("Matern", "CH"))
+
+  ggplot(df, aes(x = t, y = s)) +
+    geom_tile(aes(fill = cor)) +
+    geom_contour(aes(z = cor), breaks = levels,
+                 color = "grey20", linewidth = 0.45, alpha = 0.9) +
+    geom_text_contour(aes(z = cor), breaks = levels,
+                      color = "grey10", size = 6, skip = 0,
+                      stroke = 0.18, stroke.colour = "white") +
+    facet_grid(model ~ pair,
+               labeller = labeller(
+                 model = c(Matern = "Mat\u00e9rn", CH = "CH"),
+                 pair = label_parsed)) +
+    scale_fill_gradientn(colors = c("white", "red"), limits = c(0, 1)) +
+    scale_x_continuous(breaks = c(-2, 0, 2)) +
+    scale_y_continuous(breaks = c(-2, 0, 2)) +
+    coord_equal(xlim = c(-2, 2), ylim = c(-2, 2), expand = TRUE) +
+    labs(x = xlab, y = ylab) +
+    theme(text = element_text(size = 30),
+          strip.background = element_rect(
+            fill = "grey85", colour = "grey50"),
+          strip.text = element_text(colour = "black"),
+          legend.title = element_blank(),
+          legend.key.height = grid::unit(0.8, "cm"))
+}
+```
+
+# Space-time covariance panels
+
+Write $\ell_k=(h,t_0+u)$ and $\ell_m=(0,t_0)$, so
+$t_k=t_0+u$ and $t_m=t_0$. In one spatial dimension,
+\[
+\begin{aligned}
+h_{ij}&=h-t_k\lambda_i+t_m\lambda_j,\\
+Q_{ij}&=t_k^2\Lambda_{ii}+t_m^2\Lambda_{jj}
+-t_kt_m(\Lambda_{ij}+\Lambda_{ji}),\\
+O_{ij}&=1+Q_{ij},\qquad r_{ij}=|h_{ij}|/\sqrt{O_{ij}}.
+\end{aligned}
+\]
+Here $h$ is the spatial lag, $h_{ij}$ is the transported displacement,
+and $r_{ij}$ is the nonnegative effective distance. The spatial mixture
+factor is evaluated at $r_{ij}$ and multiplied by $O_{ij}^{-1/2}$.
+The velocity convention is
+$\mathbf V\mid\rho^2\sim N(\boldsymbol\mu_\lambda,
+\rho^2\boldsymbol\Sigma_\Lambda/2)$, where
+$\boldsymbol\Sigma_\Lambda=[\boldsymbol\Lambda_{ij}]$.
+
+```{r}
+st_panels = function(lambda, Sigma_Lambda, t0 = 0) {
+  out = list()
+  tk = t0 + grid$t
+  tm = t0
+  for (model in c("Matern", "CH")) {
+    for (i in 1:2) {
+      for (j in 1:2) {
+        h_ij = grid$s - tk * lambda[i] + tm * lambda[j]
+        Q_ij = tk^2 * Sigma_Lambda[i, i] + tm^2 * Sigma_Lambda[j, j] -
+          tk * tm * (Sigma_Lambda[i, j] + Sigma_Lambda[j, i])
+        O_ij = 1 + Q_ij
+        r_ij = abs(h_ij) / sqrt(O_ij)
+        out[[length(out) + 1]] = mutate(grid,
+          cor = spatial_cor(r_ij, model, i, j) / sqrt(O_ij),
+          model = model, pair = paste0("K[", i, j, "]"))
+      }
+    }
+  }
+  bind_rows(out)
+}
+```
+
+## Shared velocity
+
+Both responses use the same velocity. Consequently
+$K_{12}(\ell_k,\ell_m)=K_{21}(\ell_k,\ell_m)$: different marginal
+parameters do **not** create asymmetry between response labels.
+Nonzero mean transport can still give directional asymmetry,
+$K_{ij}(h,u)\ne K_{ij}(h,-u)$.
+
+```{r}
+shared = st_panels(lambda = rep(lambda[1], 2),
+                   Sigma_Lambda = matrix(Sigma_Lambda[1, 1], 2, 2),
+                   t0 = t0)
+p_shared = plot_contours(shared) + 
+    theme(
+    legend.text = element_text(size = 20),
+    legend.position = "bottom",
+    legend.box.spacing = grid::unit(0, "pt")) + 
+  guides(
+    fill = guide_colorbar(
+      barwidth = grid::unit(8,"cm")
+    )
+  )
+p_shared   
+ggsave("figures/contour_multivariate_shared.png", p_shared,
+       width = 16, height = 9, dpi = 300)
+```
+
+## Correlated component velocities
+
+Here $t_0=1$, $\lambda=(0.65,-0.25)$, and
+$\Sigma_\Lambda=\left(\begin{smallmatrix}0.18&0.06\\0.06&0.28\end{smallmatrix}\right)$.
+For the two cross-panels,
+\[
+\begin{aligned}
+h_{12}&=h-0.65u-0.90,&O_{12}&=1.34+0.24u+0.18u^2,\\
+h_{21}&=h+0.25u+0.90,&O_{21}&=1.34+0.44u+0.28u^2.
+\end{aligned}
+\]
+Thus $K_{12}(\ell_k,\ell_m)\ne K_{21}(\ell_k,\ell_m)$ in general.
+At $u=0$, their spatial peaks occur at $h=0.90$ and $h=-0.90$.
+The required covariance symmetry still holds:
+$K_{12}(\ell_k,\ell_m)=K_{21}(\ell_m,\ell_k)$.
+These are nonstationary cross-covariance slices: swapping the complete
+observation points also changes the anchor time.
+
+```{r}
+component = st_panels(lambda = lambda, Sigma_Lambda = Sigma_Lambda,
+                      t0 = t0)
+p_component = plot_contours(component) +   
+  theme(
+    legend.text = element_text(size = 20),
+    legend.position = "bottom",
+    legend.box.spacing = grid::unit(0, "pt")) + 
+  guides(
+    fill = guide_colorbar(
+      barwidth = grid::unit(8,"cm")
+    )
+  )
+p_component
+ggsave("figures/contour_multivariate_component.png", p_component,
+       width = 16, height = 9, dpi = 300)
+ggsave("figures/contour_multivariate_component.pdf", p_component,
+       width = 12, height = 8)
+```
+
+# Two spatial dimensions: asymmetry between responses
+
+This figure has two spatial axes, $h_1$ and $h_2$, with time held fixed.
+Use the same ordered observation points in every panel:
+\[
+\ell_k=((h_1,h_2),1.5),\qquad \ell_m=((0,0),0.5),\qquad u=1.
+\]
+The separate parameter set below uses simple numbers to make the
+asymmetry between responses visible. It does not change the preceding
+one-dimensional space-time examples.
+
+The mean velocities are
+$\boldsymbol\lambda_1=(0.6,0.4)^\top$ and
+$\boldsymbol\lambda_2=(-0.2,0.2)^\top$, with covariance blocks
+\[
+\boldsymbol\Lambda_{11}=\operatorname{diag}(0.8,0.1),\qquad
+\boldsymbol\Lambda_{22}=\operatorname{diag}(0.1,0.6),\qquad
+\boldsymbol\Lambda_{12}=\boldsymbol\Lambda_{21}=0.1\mathbf I_2.
+\]
+The conditional velocity covariance is
+$\operatorname{Cov}(\mathbf v_i,\mathbf v_j\mid\rho^2)
+=\rho^2\boldsymbol\Lambda_{ij}/2$.
+The joint velocity covariance is positive definite. Grouping its entries
+by spatial direction gives the two matrices
+$\left(\begin{smallmatrix}0.8&0.1\\0.1&0.1\end{smallmatrix}\right)$
+and $\left(\begin{smallmatrix}0.1&0.1\\0.1&0.6\end{smallmatrix}\right)$,
+both positive definite.
+
+For $\mathbf h=(h_1,h_2)^\top$, use
+\[
+\begin{aligned}
+\mathbf h_{ij}&=\mathbf h-t_k\boldsymbol\lambda_i+t_m\boldsymbol\lambda_j,\\
+\mathbf Q_{ij}&=t_k^2\boldsymbol\Lambda_{ii}
++t_m^2\boldsymbol\Lambda_{jj}
+-t_kt_m(\boldsymbol\Lambda_{ij}+\boldsymbol\Lambda_{ji}),\\
+\mathbf O_{ij}&=\mathbf I_2+\mathbf Q_{ij},\qquad
+r_{ij}^2=\mathbf h_{ij}^{\top}\mathbf O_{ij}^{-1}\mathbf h_{ij}.
+\end{aligned}
+\]
+The resulting peak locations and transport matrices are
+\[
+\begin{aligned}
+\mathbf h_{12}^{\mathrm{peak}}&=(1,0.5)^\top,
+&\mathbf O_{12}&=\operatorname{diag}(2.675,1.225),\\
+\mathbf h_{21}^{\mathrm{peak}}&=(-0.6,0.1)^\top,
+&\mathbf O_{21}&=\operatorname{diag}(1.275,2.225).
+\end{aligned}
+\]
+Thus $K_{12}$ has a horizontally elongated contour centered in the
+upper-right part of its panel, whereas $K_{21}$ has a vertically
+elongated contour centered to the left. Their centers, axis
+ratios, and peak heights differ; they are not reflections of one another.
+The same comparison applies to CH. The peak correlations are approximately
+0.479 and 0.514 for Matérn, and 0.461 and 0.495 for CH, in the order
+$K_{12},K_{21}$.
+
+This illustrates
+$K_{12}(\mathbf h;1.5,0.5)\ne K_{21}(\mathbf h;1.5,0.5)$.
+Each individual contour remains symmetric about its own center.
+The required covariance symmetry exchanges both locations and times:
+$K_{12}(\mathbf h;1.5,0.5)=K_{21}(-\mathbf h;0.5,1.5)$.
+The pair of times is specified because these cross-covariances depend
+on both times, not only on their difference.
+
+```{r}
+# Simple parameters for this two-dimensional spatial example only.
+nu = c(1, 1.5)
+phi = c(1, 1)
+alpha = c(1, 1.5)
+beta = c(1, 1)
+a = 0.9
+A = matrix(c(1, a, a, 1), 2, 2)
+
+lambda_spatial = rbind(c(0.6, 0.4), c(-0.2, 0.2))
+Lambda_11 = diag(c(0.8, 0.1))
+Lambda_22 = diag(c(0.1, 0.6))
+Lambda_12 = 0.1 * diag(2)
+Sigma_Lambda_spatial = rbind(cbind(Lambda_11, Lambda_12),
+                            cbind(t(Lambda_12), Lambda_22))
+
+tm = 0.5
+u_spatial = 1
+tk = tm + u_spatial
+velocity_index = list(1:2, 3:4)
+
+out = list()
+for (model in c("Matern", "CH")) {
+  for (i in 1:2) {
+    for (j in 1:2) {
+      ii = velocity_index[[i]]
+      jj = velocity_index[[j]]
+      Q_ij = tk^2 * Sigma_Lambda_spatial[ii, ii] +
+        tm^2 * Sigma_Lambda_spatial[jj, jj] -
+        tk * tm * (Sigma_Lambda_spatial[ii, jj] + Sigma_Lambda_spatial[jj, ii])
+      O_ij = diag(2) + Q_ij
+      h_ij = sweep(cbind(grid$t, grid$s), 2,
+                   tk * lambda_spatial[i, ] - tm * lambda_spatial[j, ])
+      r_ij = sqrt(rowSums((h_ij %*% solve(O_ij)) * h_ij))
+      out[[length(out) + 1]] = mutate(grid,
+        cor = spatial_cor(r_ij, model, i, j) / sqrt(det(O_ij)),
+        model = model, pair = paste0("K[", i, j, "]"))
+    }
+  }
+}
+p_spatial = plot_contours(
+  bind_rows(out), expression(h[1]), expression(h[2])) +
+  #labs(subtitle = "t_k = 1.5, t_m = 0.5 (u = 1)") + 
+    theme(
+    legend.text = element_text(size = 20),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.position = "bottom",
+    legend.box.spacing = grid::unit(0, "pt")) + 
+  guides(
+    fill = guide_colorbar(
+      barwidth = grid::unit(8,"cm")
+    )
+  ) 
+  
+p_spatial
+ggsave("figures/contour_multivariate_spatial.png", p_spatial,
+       width = 16, height = 9, dpi = 300)
+```

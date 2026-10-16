@@ -1,0 +1,673 @@
+---
+title: "Spatial and temporal covariance slices and contours"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    self_contained: true
+    md_extensions: +tex_math_single_backslash
+---
+
+Knit this file in RStudio, or run the chunks in order. Each plotting chunk displays one plot; `patchwork` assembles the four cases.
+
+## Models and reference points
+
+Write the reference point as \((s,t)\). The slice curves show
+\[
+C\{(s,t+u),(s,t)\}
+\]
+against temporal lag \(u\), with the reference points \((s,t)\) given in each legend. Spatial slices fix time; temporal slices fix location. Panels (a)-(d) correspond to the models below; these curves directly compare temporal dependence. In (b), the two curves at \(s=1\) coincide because temporal slices are stationary. The initial spatial slice at \(t=0\) is stationary in every case.
+
+Each model uses the velocity prior
+\[
+v(\cdot)\mid\rho^2\sim
+\operatorname{GP}\{\lambda(\cdot),\rho^2\Lambda(\cdot,\cdot)/2\}
+\]
+in the original construction \(w\{s-tv(s,t)\}\). Define \(h=s_i-s_j\), \(u=t_i-t_j\), and
+\[
+d(h,u)=\sqrt{h^2/\ell_1^2+u^2/\ell_2^2},\qquad
+R(h,u)=\mathcal M\{d(h,u);\nu_v,1\},\qquad \nu_v=3/2.
+\]
+
+| Case | Velocity mean \(\lambda(s,t)\) | Covariance factor \(\Lambda_{ij}\) |
+|---|---|---|
+| (a) | \(1\) | \(R(h,u)\) |
+| (b) | \(1+a_b s^2\) | \(R(h,0)\) |
+| (c) | \(1+a_c s\) | \(R(h,u)\) |
+| (d) | \(1+a_d s^2\) | \(R(h,u)\) |
+
+All four velocity means include the same constant component 1; the spatial terms in (b)-(d) retain their slice classifications. The mean velocity is positive throughout the realization domain \(s\in[0,2]\). Adding this constant changes \(m_{ij}\) by \(u\), so it affects cross-time transport while leaving equal-time spatial covariances unchanged.
+
+Use \(\sigma^2=\phi=\ell_1=\ell_2=1\), \(\nu=3/2\), \(a_b=1\), \(a_c=2\), and \(a_d=0.5\). The helper evaluates Proposition 3:
+\[
+\begin{aligned}
+Q_{ij}&=t_i^2\Lambda_{ii}+t_j^2\Lambda_{jj}-2t_it_j\Lambda_{ij},\\
+O_{ij}&=1+Q_{ij},\qquad
+m_{ij}=t_i\lambda(s_i,t_i)-t_j\lambda(s_j,t_j),\\
+r_{ij}&=|h-m_{ij}|/\sqrt{O_{ij}},\qquad
+C_{ij}=\sigma^2O_{ij}^{-1/2}\mathcal M(r_{ij};\nu,\phi).
+\end{aligned}
+\]
+`GPBayes::matern()` supplies \(\mathcal M\); the plotted values retain the covariance scale. With \(\nu=3/2\) and \(\phi=1\), \(\mathcal M(r;3/2,1)=(1+r)e^{-r}\).
+
+## Setup
+
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 6.5, fig.height = 4, fig.align = "center", dpi = 160
+)
+
+library(ggplot2)
+library(patchwork)
+
+sigma2 <- 1
+nu <- 1.5
+nu_v <- 1.5
+phi <- 1
+ell1 <- 1
+ell2 <- 1
+a_b <- 1
+a_c <- 2
+a_d <- 0.5
+
+C_matern <- function(r_ij, O_ij) {
+  sigma2 * as.numeric(GPBayes::matern(
+    matrix(r_ij, ncol = 1), range = phi, nu = nu
+  )) / sqrt(O_ij)
+}
+
+R_velocity <- function(h, u = 0) {
+  d <- sqrt((h / ell1)^2 + (u / ell2)^2)
+  as.numeric(GPBayes::matern(matrix(d, ncol = 1), range = 1, nu = nu_v))
+}
+
+velocity_covariance <- function(s_i, t_i, s_j, t_j, lambda, Lambda) {
+  m_ij <- t_i * lambda(s_i, t_i) - t_j * lambda(s_j, t_j)
+  Q_ij <- t_i^2 * Lambda(s_i, t_i, s_i, t_i) +
+    t_j^2 * Lambda(s_j, t_j, s_j, t_j) -
+    2 * t_i * t_j * Lambda(s_i, t_i, s_j, t_j)
+  O_ij <- 1 + Q_ij
+  r_ij <- abs(s_i - s_j - m_ij) / sqrt(O_ij)
+  data.frame(m_ij, Q_ij, O_ij, r_ij,
+             C_ij = C_matern(r_ij, O_ij))
+}
+
+u <- seq(0, 2, length.out = 301)
+setting_label <- expression(paste("(", s, ", ", t, ")"))
+
+style <- list(
+  scale_colour_manual(values = c("#146C94", "#CB6A22", "#6A4C93")),
+  scale_linetype_manual(values = c("solid", "dashed", "dotdash")),
+  scale_y_continuous(limits = c(0, 1.04 * sigma2),
+                     breaks = sigma2 * seq(0, 1, 0.25)),
+  labs(x = expression(u),
+       y = expression(paste("C{(", s, ", ", t + u, "), (", s, ", ", t, ")}")))
+)
+theme_set(theme_minimal(base_size = 15, base_family = "serif") +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"),
+        legend.position = "bottom", legend.text = element_text(size = 8),
+        legend.title = element_text(size = 14),
+        legend.box.spacing = grid::unit(0, "pt"),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.box.margin = margin(0, 0, 0, 0),
+        legend.spacing.y = grid::unit(0, "pt"),
+        legend.key.height = grid::unit(10, "pt"),
+        axis.title.x = element_text(margin = margin(t = 3, b = 0)),
+        legend.key.width = grid::unit(0.2, "in")))
+```
+
+## (a) Stationary spatial slices; nonstationary temporal slices
+
+Reference points: \((s,t)=(0,0),(0,1),(0,2)\). The constant velocity mean \(\lambda(s,t)=1\) introduces directional transport while preserving this slice classification.
+
+The continuous stationary velocity covariance \(\Lambda_{ij}=R(h,u)\) removes the spatial jump from a spatial white-noise velocity model. For the unit length scales used here,
+\[
+\begin{aligned}
+O(h,u;t)&=1+u^2+2t(t+u)\{1-R(h,u)\},\\
+C\{(s+h,t+u),(s,t)\}
+&=O(h,u;t)^{-1/2}\mathcal M\!\left(\frac{|h-u|}{\sqrt{O(h,u;t)}};\frac32,1\right).
+\end{aligned}
+\]
+This covariance is independent of reference location \(s\), depends on reference time \(t\), and tends to 1 as \((h,u)\to(0,0)\). It therefore gives spatial stationarity and temporal nonstationarity without a nugget.
+
+```{r temporal-only}
+lambda_a <- function(s, t) 1
+Lambda_a <- function(s_i, t_i, s_j, t_j) {
+  R_velocity(s_i - s_j, t_i - t_j)
+}
+
+d_a <- expand.grid(u = u, t_j = 0:2)
+d_a <- cbind(d_a, with(d_a,
+  velocity_covariance(0, t_j + u, 0, t_j, lambda_a, Lambda_a)))
+d_a$setting <- factor(d_a$t_j, levels = 0:2,
+                      labels = c("(0, 0)", "(0, 1)", "(0, 2)"))
+
+p_a <- ggplot(d_a, aes(u, C_ij, colour = setting, linetype = setting)) +
+  geom_line(linewidth = 0.7) + style +
+  labs(subtitle = "(a)",
+       colour = setting_label, linetype = setting_label)
+p_a
+```
+
+## (b) Nonstationary spatial slices; stationary temporal slices
+
+Reference points: \((s,t)=(0,0),(1,0),(1,1)\). The two curves at \(s=1\) coincide.
+
+```{r spatial-sitewise-stationary}
+lambda_b <- function(s, t) 1 + a_b * s^2
+Lambda_b <- function(s_i, t_i, s_j, t_j) {
+  R_velocity(s_i - s_j)
+}
+
+d_b <- expand.grid(u = u, id = 1:3)
+d_b$s_j <- c(0, 1, 1)[d_b$id]
+d_b$t_j <- c(0, 0, 1)[d_b$id]
+d_b$setting <- factor(d_b$id, labels = c("(0, 0)", "(1, 0)", "(1, 1)"))
+d_b <- cbind(d_b, with(d_b,
+  velocity_covariance(s_j, t_j + u, s_j, t_j, lambda_b, Lambda_b)))
+
+p_b <- ggplot(d_b, aes(u, C_ij, colour = setting, linetype = setting)) +
+  geom_line(linewidth = 0.7) + style +
+  labs(subtitle = "(b)",
+       colour = setting_label, linetype = setting_label)
+p_b
+```
+
+## (c) Stationary spatial slices; temporal dependence varies by site and time
+
+Reference points: \((s,t)=(0,0),(1,0),(0,1)\). Equal-time spatial slices are stationary, but dependence across different times varies with spatial location.
+
+```{r space-time}
+lambda_c <- function(s, t) 1 + a_c * s
+Lambda_c <- function(s_i, t_i, s_j, t_j) {
+  R_velocity(s_i - s_j, t_i - t_j)
+}
+
+d_c <- expand.grid(u = u, id = 1:3)
+d_c$s_j <- c(0, 1, 0)[d_c$id]
+d_c$t_j <- c(0, 0, 1)[d_c$id]
+d_c$setting <- factor(d_c$id, labels = c("(0, 0)", "(1, 0)", "(0, 1)"))
+d_c <- cbind(d_c, with(d_c,
+  velocity_covariance(s_j, t_j + u, s_j, t_j, lambda_c, Lambda_c)))
+
+p_c <- ggplot(d_c, aes(u, C_ij, colour = setting, linetype = setting)) +
+  geom_line(linewidth = 0.7) + style +
+  labs(subtitle = "(c)",
+       colour = setting_label, linetype = setting_label)
+p_c
+```
+
+## (d) Nonstationary spatial and temporal slices
+
+Reference points: \((s,t)=(0,0),(1,0),(1,1)\). Unlike (b), the two curves at \(s=1\) differ across starting times. Spatial slices are nonstationary for \(t\ne0\).
+
+```{r nonstationary-spatial-slices-and-time}
+lambda_d <- function(s, t) 1 + a_d * s^2
+Lambda_d <- function(s_i, t_i, s_j, t_j) {
+  R_velocity(s_i - s_j, t_i - t_j)
+}
+
+d_d <- d_b[c("u", "s_j", "t_j", "setting")]
+d_d <- cbind(d_d, with(d_d,
+  velocity_covariance(s_j, t_j + u, s_j, t_j, lambda_d, Lambda_d)))
+
+p_d <- ggplot(d_d, aes(u, C_ij, colour = setting, linetype = setting)) +
+  geom_line(linewidth = 0.7) + style +
+  labs(subtitle = "(d)",
+       colour = setting_label, linetype = setting_label)
+p_d
+```
+
+## Assemble the slice plots
+
+```{r assemble-four-panels, fig.width=9, fig.height=6}
+four_panels <- (p_a + p_b) / (p_c + p_d)
+four_panels
+ggsave("Nonstationarity_illustration.pdf", four_panels, width = 9, height = 6)
+```
+
+## Covariance contours
+
+For each case, plot
+\[
+C\{(s+h,t+u),(s,t)\}=C\{(h,u),(0,0)\}
+\]
+with the reference point fixed at \((s,t)=(0,0)\). The horizontal axis is temporal lag \(u\); the vertical axis is spatial lag \(h\). All four plots use the same covariance scale, \([0,1]\), and contour levels \(0.2,0.4,0.6,0.8\). The white-to-red fill matches the active palette in `pltfuns.R`, as used by `Contour_plots.Rmd`.
+
+In (a), the constant velocity mean gives \(C\{(h,u),(0,0)\}=(1+u^2)^{-1/2}\mathcal M\bigl(|h-u|/\sqrt{1+u^2};3/2,1\bigr)\). Its spatial covariance ridge follows \(h=u\), showing directional transport.
+
+These contours show covariance shape at one reference point; the slice plots above compare different reference points. At reference time \(t=0\), all four models have \(O_{ij}=1+u^2\), so the contours do not distinguish the velocity covariance kernels themselves. They retain each model's velocity mean.
+
+```{r contour-setup}
+contour_grid <- expand.grid(
+  u = seq(-2, 2, length.out = 201),
+  h = seq(-2, 2, length.out = 201)
+)
+
+contour_covariance <- function(lambda, Lambda) {
+  cbind(contour_grid, with(contour_grid,
+    velocity_covariance(h, u, 0, 0, lambda, Lambda)))
+}
+
+plot_contour <- function(df, subtitle) {
+  ggplot(df, aes(u, h)) +
+    geom_raster(aes(fill = C_ij)) +
+    geom_contour(aes(z = C_ij), breaks = seq(0.2, 0.8, by = 0.2),
+                 colour = "#3366FF", linewidth = 0.35) +
+    scale_fill_gradientn(colours = c("white", "red"),
+                         limits = c(0, sigma2), breaks = seq(0, 1, by = 0.25),
+                         guide = guide_colourbar(
+                           barwidth = grid::unit(2.5, "in"),
+                           barheight = grid::unit(0.15, "in"))) +
+    scale_x_continuous(breaks = -2:2) +
+    scale_y_continuous(breaks = -2:2) +
+    coord_equal(expand = FALSE) +
+    labs(x = expression(u), y = expression(h), subtitle = subtitle,
+         fill = NULL) +
+    theme(panel.grid = element_blank(),
+          plot.subtitle = element_text(size = 12),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10))
+}
+```
+
+### Contour (a)
+
+```{r contour-a}
+d_contour_a <- contour_covariance(lambda_a, Lambda_a)
+p_contour_a <- plot_contour(d_contour_a, p_a$labels$subtitle)
+p_contour_a
+```
+
+### Contour (b)
+
+```{r contour-b}
+d_contour_b <- contour_covariance(lambda_b, Lambda_b)
+p_contour_b <- plot_contour(d_contour_b, p_b$labels$subtitle)
+p_contour_b
+```
+
+### Contour (c)
+
+```{r contour-c}
+d_contour_c <- contour_covariance(lambda_c, Lambda_c)
+p_contour_c <- plot_contour(d_contour_c, p_c$labels$subtitle)
+p_contour_c
+```
+
+### Contour (d)
+
+```{r contour-d}
+d_contour_d <- contour_covariance(lambda_d, Lambda_d)
+p_contour_d <- plot_contour(d_contour_d, p_d$labels$subtitle)
+p_contour_d
+```
+
+## Assemble the contour plots
+
+```{r assemble-contours, fig.width=9, fig.height=9}
+contour_panels <- ((p_contour_a + p_contour_b) / (p_contour_c + p_contour_d)) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+contour_panels
+ggsave("Nonstationarity_contours.pdf", contour_panels, width = 9, height = 9)
+ggsave("Nonstationarity_contours.png", contour_panels,
+       width = 9, height = 9, dpi = 300, bg = "white")
+```
+
+## Nonstationarity diagnostic maps
+
+Columns 1-4 correspond to the four velocity specifications in cases (a)-(d) above. Rows (a)-(c) identify the three diagnostics below; for example, panel a.2 is the spatial diagnostic for the second velocity specification. Each map places a lag on the horizontal axis and a reference coordinate on the vertical axis. All maps use the same white-to-red covariance scale, \([0,1]\).
+
+1. **Spatial slices:** \(S(h,s)=C\{(s+h,1),(s,1)\}\). Variation with \(s\) at fixed \(h\) demonstrates spatial nonstationarity at time 1.
+2. **Temporal slices:** \(T(u,t)=C\{(1,t+u),(1,t)\}\). Variation with \(t\) at fixed \(u\) demonstrates temporal nonstationarity at site 1.
+3. **Site dependence of temporal covariance:** \(L(u,s)=C\{(s,1+u),(s,1)\}\). Variation with \(s\) at fixed \(u\) shows differences in temporal dependence across sites at reference time 1.
+
+Thus, vertical bands indicate invariance in the reference coordinate. Row (a) varies vertically in columns 2 and 4, row (b) in columns 1, 3, and 4, and row (c) in columns 2, 3, and 4. The third row describes site dependence of temporal covariance, a different property from nonstationarity within equal-time spatial slices.
+
+All four spatial covariance slices are continuous at \(h=0\), with covariance \(\sigma^2=1\) there. The caption below each row gives the covariance being plotted.
+
+```{r diagnostic-setup}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 4)
+
+spatial_grid <- expand.grid(
+  h = seq(-2, 2, length.out = 201),
+  s = seq(0, 2, length.out = 161)
+)
+temporal_grid <- expand.grid(
+  u = seq(0, 2, length.out = 201),
+  t = seq(0, 2, length.out = 161)
+)
+site_grid <- expand.grid(
+  u = seq(0, 2, length.out = 201),
+  s = seq(0, 2, length.out = 161)
+)
+
+plot_reference_map <- function(df, x, y, panel) {
+  ggplot(df, aes(x = .data[[x]], y = .data[[y]])) +
+    geom_raster(aes(fill = C_ij), interpolate = FALSE) +
+    geom_contour(aes(z = C_ij), breaks = seq(0.2, 0.8, by = 0.2),
+                 colour = "#3366FF", linewidth = 0.3) +
+    scale_fill_gradientn(
+    colours = c("white", "red"), limits = c(0, sigma2),
+    breaks = seq(0, 1, by = 0.25),
+    guide = guide_colourbar(barwidth = grid::unit(2.5, "in"),
+                            barheight = grid::unit(0.15, "in"))
+  ) +
+    scale_x_continuous(breaks = if (x == "h") -2:2 else seq(0, 2, by = 0.5)) +
+    scale_y_continuous(breaks = seq(0, 2, by = 0.5)) +
+    coord_cartesian(expand = FALSE) +
+    labs(x = str2expression(x), y = str2expression(y),
+         subtitle = panel, fill = NULL) +
+    theme(panel.grid = element_blank(), aspect.ratio = 1,
+          plot.margin = margin(t = 2, r = 4, b = 0, l = 4),
+          plot.subtitle = element_text(size = 13),
+          axis.title = element_text(size = 13),
+          axis.text = element_text(size = 10),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10))
+}
+```
+
+### Row 1: spatial slices at time 1
+
+```{r diagnostic-spatial-a}
+d_spatial_a <- cbind(spatial_grid, with(spatial_grid,
+  velocity_covariance(s + h, 1, s, 1, lambda_a, Lambda_a)))
+p_spatial_a <- plot_reference_map(d_spatial_a, "h", "s", "a.1")
+p_spatial_a
+```
+
+```{r diagnostic-spatial-b}
+d_spatial_b <- cbind(spatial_grid, with(spatial_grid,
+  velocity_covariance(s + h, 1, s, 1, lambda_b, Lambda_b)))
+p_spatial_b <- plot_reference_map(d_spatial_b, "h", "s", "a.2")
+p_spatial_b
+```
+
+```{r diagnostic-spatial-c}
+d_spatial_c <- cbind(spatial_grid, with(spatial_grid,
+  velocity_covariance(s + h, 1, s, 1, lambda_c, Lambda_c)))
+p_spatial_c <- plot_reference_map(d_spatial_c, "h", "s", "a.3")
+p_spatial_c
+```
+
+```{r diagnostic-spatial-d}
+d_spatial_d <- cbind(spatial_grid, with(spatial_grid,
+  velocity_covariance(s + h, 1, s, 1, lambda_d, Lambda_d)))
+p_spatial_d <- plot_reference_map(d_spatial_d, "h", "s", "a.4")
+p_spatial_d
+```
+
+### Row 2: temporal slices at site 1
+
+```{r diagnostic-temporal-a}
+d_temporal_a <- cbind(temporal_grid, with(temporal_grid,
+  velocity_covariance(1, t + u, 1, t, lambda_a, Lambda_a)))
+p_temporal_a <- plot_reference_map(d_temporal_a, "u", "t", "b.1")
+p_temporal_a
+```
+
+```{r diagnostic-temporal-b}
+d_temporal_b <- cbind(temporal_grid, with(temporal_grid,
+  velocity_covariance(1, t + u, 1, t, lambda_b, Lambda_b)))
+p_temporal_b <- plot_reference_map(d_temporal_b, "u", "t", "b.2")
+p_temporal_b
+```
+
+```{r diagnostic-temporal-c}
+d_temporal_c <- cbind(temporal_grid, with(temporal_grid,
+  velocity_covariance(1, t + u, 1, t, lambda_c, Lambda_c)))
+p_temporal_c <- plot_reference_map(d_temporal_c, "u", "t", "b.3")
+p_temporal_c
+```
+
+```{r diagnostic-temporal-d}
+d_temporal_d <- cbind(temporal_grid, with(temporal_grid,
+  velocity_covariance(1, t + u, 1, t, lambda_d, Lambda_d)))
+p_temporal_d <- plot_reference_map(d_temporal_d, "u", "t", "b.4")
+p_temporal_d
+```
+
+### Row 3: site dependence of temporal covariance at reference time 1
+
+```{r diagnostic-site-a}
+d_site_a <- cbind(site_grid, with(site_grid,
+  velocity_covariance(s, 1 + u, s, 1, lambda_a, Lambda_a)))
+p_site_a <- plot_reference_map(d_site_a, "u", "s", "c.1")
+p_site_a
+```
+
+```{r diagnostic-site-b}
+d_site_b <- cbind(site_grid, with(site_grid,
+  velocity_covariance(s, 1 + u, s, 1, lambda_b, Lambda_b)))
+p_site_b <- plot_reference_map(d_site_b, "u", "s", "c.2")
+p_site_b
+```
+
+```{r diagnostic-site-c}
+d_site_c <- cbind(site_grid, with(site_grid,
+  velocity_covariance(s, 1 + u, s, 1, lambda_c, Lambda_c)))
+p_site_c <- plot_reference_map(d_site_c, "u", "s", "c.3")
+p_site_c
+```
+
+```{r diagnostic-site-d}
+d_site_d <- cbind(site_grid, with(site_grid,
+  velocity_covariance(s, 1 + u, s, 1, lambda_d, Lambda_d)))
+p_site_d <- plot_reference_map(d_site_d, "u", "s", "c.4")
+p_site_d
+```
+
+## Assemble the diagnostic maps
+
+```{r assemble-diagnostic-maps, fig.width=12.8, fig.height=11.2}
+row_caption <- function(label) {
+  wrap_elements(full = grid::textGrob(
+    label, x = 0.5, y = 1, vjust = 1,
+    gp = grid::gpar(fontfamily = "serif", fontsize = 13)
+  )) + theme(plot.margin = margin(0, 0, 0, 0))
+}
+
+caption_a <- row_caption(expression(paste(
+  "(a): Plot of ", C, "{(", s + h, ", 1), (", s, ", 1)}"
+)))
+caption_b <- row_caption(expression(paste(
+  "(b): Plot of ", C, "{(1, ", t + u, "), (1, ", t, ")}"
+)))
+caption_c <- row_caption(expression(paste(
+  "(c): Plot of ", C, "{(", s, ", 1 + ", u, "), (", s, ", 1)}"
+)))
+
+diagnostic_panels <- wrap_plots(
+  p_spatial_a, p_spatial_b, p_spatial_c, p_spatial_d, caption_a,
+  p_temporal_a, p_temporal_b, p_temporal_c, p_temporal_d, caption_b,
+  p_site_a, p_site_b, p_site_c, p_site_d, caption_c,
+  design = "ABCD\nEEEE\nFGHI\nJJJJ\nKLMN\nOOOO",
+  heights = grid::unit(c(1, 20, 1, 20, 1, 20),
+                       c("null", "pt", "null", "pt", "null", "pt")),
+  guides = "collect"
+) & theme(legend.position = "bottom")
+diagnostic_panels
+ggsave("Nonstationarity_diagnostics.pdf", diagnostic_panels,
+       width = 12.8, height = 11.2)
+ggsave("Nonstationarity_diagnostics.png", diagnostic_panels,
+       width = 12.8, height = 11.2, dpi = 300, bg = "white")
+```
+
+## Process realizations on a space-time grid
+
+For each velocity specification, simulate a **zero-mean Gaussian process with the averaged covariance \(C\)** used above. Thus, the grid values have the distribution
+\[
+\mathbf w_k\sim N(\mathbf 0,\mathbf C_k),\qquad
+(\mathbf C_k)_{ij}=C_k\{(s_i,t_i),(s_j,t_j)\},
+\]
+where \(k=1,\ldots,4\) denotes the original models (a)-(d), or columns 1-4 of the diagnostic figure. These Gaussian draws use the covariance after integrating out the velocity and scale parameters. Explicitly drawing those latent quantities and deforming a base process would generally give a different joint distribution with the same covariance.
+
+The grid has 61 spatial locations and 61 times on \([0,2]\times[0,2]\), including \(t=0\). The process variance remains \(\sigma^2=1\); the nonzero velocity means affect dependence, while the process mean is zero. A fixed random seed couples the four simulations for comparison. We first draw a common initial spatial realization and then simulate each model conditionally on it. The initial covariance is the stationary Matérn covariance \(\mathcal M(|s_i-s_j|;\nu,\phi)\).
+
+The panels plot space \(s\) horizontally and time \(t\) vertically, with a shared blue-white-red scale centered at zero. Raster cells display the sampled grid values without interpolation. No nugget or diagonal variance is added. A pivoted Cholesky factorization with tolerance \(10^{-12}\) omits numerically negligible residual directions when the conditional covariance is nearly singular, as in model (b).
+
+Both the base covariance and velocity covariance use Matérn smoothness \(3/2\). The velocity covariance is smooth in space and time in (a), (c), and (d), and smooth in space with no temporal variation in (b). These choices give smoother process realizations while retaining the four slice classifications.
+
+These realizations illustrate process behavior; the covariance diagnostics above establish the stationarity properties.
+
+```{r realization-setup}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5)
+
+process_grid <- expand.grid(
+  s = seq(0, 2, length.out = 61),
+  t = seq(0, 2, length.out = 61)
+)
+set.seed(2026)
+normal_draw <- rnorm(nrow(process_grid))
+
+simulate_process <- function(lambda, Lambda) {
+  s <- process_grid$s
+  t <- process_grid$t
+  n <- nrow(process_grid)
+  Lambda_ij <- outer(seq_len(n), seq_len(n), function(i, j) {
+    Lambda(s[i], t[i], s[j], t[j])
+  })
+  scaled_variance <- t^2 * Lambda(s, t, s, t)
+  O_ij <- 1 + outer(scaled_variance, scaled_variance, "+") -
+    2 * outer(t, t) * Lambda_ij
+  mean_coordinate <- s - t * lambda(s, t)
+  r_ij <- abs(outer(mean_coordinate, mean_coordinate, "-")) / sqrt(O_ij)
+  C <- matrix(C_matern(r_ij, O_ij), nrow = n)
+
+  initial <- which(t == 0)
+  remaining <- which(t != 0)
+  R0 <- chol(C[initial, initial])
+  A <- forwardsolve(t(R0), C[initial, remaining])
+  S <- C[remaining, remaining] - crossprod(A)
+  R <- suppressWarnings(chol(S, pivot = TRUE, tol = 1e-12))
+  pivot <- attr(R, "pivot")
+  rank <- attr(R, "rank")
+  residual <- drop(crossprod(
+    R[seq_len(rank), , drop = FALSE], normal_draw[remaining][seq_len(rank)]
+  ))
+  value <- numeric(n)
+  value[initial] <- drop(crossprod(R0, normal_draw[initial]))
+  value[remaining] <- drop(crossprod(A, normal_draw[initial])) +
+    residual[order(pivot)]
+  data.frame(process_grid, value)
+}
+
+realization_a <- simulate_process(lambda_a, Lambda_a)
+realization_b <- simulate_process(lambda_b, Lambda_b)
+realization_c <- simulate_process(lambda_c, Lambda_c)
+realization_d <- simulate_process(lambda_d, Lambda_d)
+
+value_limit <- ceiling(max(abs(c(
+  realization_a$value, realization_b$value,
+  realization_c$value, realization_d$value
+))))
+
+plot_realization <- function(df, panel) {
+  ggplot(df, aes(s, t, fill = value)) +
+    geom_raster(interpolate = FALSE) +
+    scale_fill_gradient2(
+      low = "#2166AC", mid = "white", high = "red", midpoint = 0,
+      limits = c(-value_limit, value_limit),
+      breaks = seq(-value_limit, value_limit, by = 1),
+      guide = guide_colourbar(barwidth = grid::unit(4.5, "in"),
+                              barheight = grid::unit(0.22, "in"))
+    ) +
+    scale_x_continuous(breaks = seq(0, 2, by = 0.5)) +
+    scale_y_continuous(breaks = seq(0, 2, by = 0.5)) +
+    coord_equal(expand = FALSE) +
+    labs(x = expression(s), y = expression(t),
+         subtitle = panel, fill = NULL) +
+    theme(axis.title = element_text(size = 28),
+          axis.text = element_text(size = 24),
+          panel.grid = element_blank(),
+          plot.subtitle = element_text(size = 28),
+          legend.text = element_text(size = 24))
+}
+```
+
+### Realization (a)
+
+```{r realization-a}
+p_realization_a <- plot_realization(realization_a, "(a)")
+p_realization_a
+```
+
+### Realization (b)
+
+```{r realization-b}
+p_realization_b <- plot_realization(realization_b, "(b)")
+p_realization_b
+```
+
+### Realization (c)
+
+```{r realization-c}
+p_realization_c <- plot_realization(realization_c, "(c)")
+p_realization_c
+```
+
+### Realization (d)
+
+```{r realization-d}
+p_realization_d <- plot_realization(realization_d, "(d)")
+p_realization_d
+```
+
+## Assemble the process realizations
+
+```{r assemble-realizations, fig.width=10, fig.height=10}
+realization_panels <- wrap_plots(
+  p_realization_a, p_realization_b, p_realization_c, p_realization_d,
+  ncol = 2, guides = "collect"
+) & theme(
+  axis.title = element_text(size = 24),
+  axis.text = element_text(size = 20),
+  plot.subtitle = element_text(size = 24),
+  legend.text = element_text(size = 20),
+  legend.position = "bottom"
+)
+
+realization_panels
+ggsave("Nonstationarity_realizations.pdf", realization_panels,
+       width = 10, height = 10)
+```
+
+## Process realizations in one row
+
+The same four realizations are also displayed side by side with a shared colorbar, one vertical label \(t\) at the first panel, and one horizontal label \(s\) below the row.
+
+```{r assemble-realizations-row, fig.width=16, fig.height=4.9}
+shared_s <- wrap_elements(full = grid::textGrob(
+  expression(s), x = 0.5, y = 1, vjust = 1,
+  gp = grid::gpar(fontfamily = "serif", fontsize = 28)
+)) + theme(plot.margin = margin(0, 0, 0, 0))
+
+realization_row <- wrap_plots(
+  p_realization_a + labs(x = NULL),
+  p_realization_b + labs(x = NULL, y = NULL),
+  p_realization_c + labs(x = NULL, y = NULL),
+  p_realization_d + labs(x = NULL, y = NULL),
+  shared_s,
+  design = "ABCD\nEEEE",
+  heights = grid::unit(c(1, 26), c("null", "pt")),
+  guides = "collect"
+) & theme(
+  axis.title = element_text(size = 24),
+  axis.text = element_text(size = 20),
+  plot.subtitle = element_text(size = 24),
+  legend.text = element_text(size = 20),
+  plot.margin = margin(4, 4, 0, 4),
+  legend.position = "bottom",
+  legend.box.spacing = grid::unit(0, "pt"),
+  legend.margin = margin(0, 0, 0, 0)
+)
+
+realization_row
+ggsave("Nonstationarity_realizations_row.pdf", realization_row,
+       width = 16, height = 5)
+```
